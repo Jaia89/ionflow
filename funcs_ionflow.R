@@ -24,6 +24,7 @@
 #' wl-14-08-2020, Fri: remove two R packages "pheatmap", "qgraph"
 #' wl-01-09-2020, Tue: Change data prparation in pre_processing
 #' wl-02-09-2020, Wed: change variable names in pre_processing
+#' wl-10-09-2020, Thu: apply 'lintr'
 
 #' =======================================================================
 #'
@@ -86,8 +87,8 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
   #' wl-23-07-2020, Thu: remove Knockout outliers in terms of Ion.
   data_long <- data_long[data_long$Outlier < 1, ]
   data_long <- subset(data_long, select = -Outlier)
-  ## wl-23-07-2020, Thu: NAs in wide format due to outlier removal.
-  ## con.tab(data_long)  #' NAs: 28 in 1454 Knockout
+  #' wl-23-07-2020, Thu: NAs in wide format due to outlier removal.
+  #' con.tab(data_long)  #' NAs: 28 in 1454 Knockout
 
   ## -------------------> Median batch correction
   data_long$log <- log(data_long$Concentration)
@@ -275,16 +276,16 @@ exploratory_analysis <- function(data = NULL) {
   ## pca_p
 
   ## -------------------> HEATMAP
-  ## wl-14-08-2020, Fri:  use ggplots
+  #' wl-14-08-2020, Fri:  use ggplots
   heatmap.2(as.matrix(data[, -1]),
     scale = "row", col = bluered(100),
     trace = "none", density.info = "none",
     hclustfun = function(x) hclust(x, method = "ward.D")
   )
-  ## library(pheatmap)
-  ## pheatmap(data[, -1], show_rownames = F, cluster_cols = T, cluster_rows = T,
-  ##          legend = T, fontsize = 15, clustering_method = "ward.D",
-  ##          scale = "row")
+  #' library(pheatmap)
+  #' pheatmap(data[, -1], show_rownames = F, cluster_cols = T, cluster_rows = T,
+  #'          legend = T, fontsize = 15, clustering_method = "ward.D",
+  #'          scale = "row")
   pheat <- recordPlot()
 
   ## -------------------> PAIRWISE CORRELATION MAP
@@ -300,20 +301,20 @@ exploratory_analysis <- function(data = NULL) {
   #' wl-13-08-2020, Thu: there is no 'qgraph' in conda forge and bio conda.
   #' Have to plot the correlation network instead.
   if (T) {
-    ## wl-14-08-2020, Fri: debug code only
-    ## library(glasso)
-    ## corr_reg <- glasso(corr, rho = 0.01)
-    ## net <- network::network(corr_reg$w, directed = FALSE)
+    #' wl-14-08-2020, Fri: debug code only
+    #' library(glasso)
+    #' corr_reg <- glasso(corr, rho = 0.01)
+    #' net <- network::network(corr_reg$w, directed = FALSE)
     net <- network::network(corr, directed = FALSE)
 
     #' set edge attributes
     net %e% "weight" <- corr
     net %e% "weight_abs" <- abs(corr) * 6
     net %e% "color" <- ifelse(net %e% "weight" > 0, "lightgreen", "coral")
-    ## set.edge.value(net, "weight", corr)
-    ## list.network.attributes(net)
-    ## list.edge.attributes(net)
-    ## list.vertex.attributes(net)
+    #' set.edge.value(net, "weight", corr)
+    #' list.network.attributes(net)
+    #' list.edge.attributes(net)
+    #' list.vertex.attributes(net)
     net_p <-
       ggnet2(net,
         label = TRUE, mode = "spring",
@@ -328,17 +329,17 @@ exploratory_analysis <- function(data = NULL) {
       graph = "glasso", layout = "spring",
       tuning = 0.25, sampleSize = nrow(data[, -1])
     ))
-    Graph_lasso <- recordPlot()
+    graph_lasso <- recordPlot()
   }
 
   ## -------------------> Output
   res <- list()
-  res$plot_Pearson_correlation <- p_corr
-  res$plot_pca_Individual <- pca_p
+  res$plot_pearson_correlation <- p_corr
+  res$plot_pca_individual <- pca_p
   res$data_pca_loadings <- pca_loadings
   res$plot_heatmap <- pheat
   res$plot_pairwise_correlation_map <- pcm
-  ## res$plot_regularized_partial_correlation_network <- Graph_lasso
+  #' res$plot_regularized_partial_correlation_network <- graph_lasso
   res$plot_correlation_network <- net_p
   return(res)
 }
@@ -400,9 +401,9 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
   data_GOslim$Ontology <- as.character(data_GOslim$Ontology)
 
   kego <- plyr::dlply(mat, "cluster", function(x) {
-    ## x <- subset(mat, cluster == "15")
-    inputGeneSet <- as.character(x$Knockout)
-    N <- length(inputGeneSet)
+    #' x <- subset(mat, cluster == "15")
+    input_gene_set <- as.character(x$Knockout)
+    N <- length(input_gene_set)
 
     res <- data_GOslim %>%
       dplyr::mutate(Ontology = setNames(
@@ -413,14 +414,14 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
         ),
         c("P", "C", "F")
       )[Ontology]) %>%
-      dplyr::filter(ORFs %in% inputGeneSet) %>%
+      dplyr::filter(ORFs %in% input_gene_set) %>%
       dplyr::group_by(GOslim, Ontology) %>%
       dplyr::filter(GOslim != "other") %>%
       dplyr::rename(Term = GOslim) %>%
       dplyr::summarise(Count = n()) %>%
       dplyr::mutate(Percent = Count / N * 100) %>%
       dplyr::bind_rows(data_ORF2KEGG %>%
-        dplyr::filter(ORF %in% inputGeneSet) %>%
+        dplyr::filter(ORF %in% input_gene_set) %>%
         dplyr::group_by(KEGGID, Pathway) %>%
         dplyr::summarise(Count = n()) %>%
         dplyr::mutate(Ontology = "KEGG") %>%
@@ -451,17 +452,17 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
   ## -------------------> GO TERMS ENRICHMENT
 
   #' wl-04-08-2020, Tue: re-write
-  universeGenes <- as.character(data_symb$Knockout)
+  universe_genes <- as.character(data_symb$Knockout)
   mat <- data_symb[idx, ]
 
   goen <- plyr::dlply(mat, "cluster", function(x) {
-    ## x <- subset(mat, cluster == "10")
-    inputGeneSet <- as.character(x$Knockout)
+    #' x <- subset(mat, cluster == "10")
+    input_gene_set <- as.character(x$Knockout)
     ont <- c("BP", "MF", "CC") ## wl-04-08-2020, Tue: why three?
     res <- lapply(ont, function(y) {
       params <- new("GOHyperGParams",
-        geneIds = inputGeneSet,
-        universeGeneIds = universeGenes,
+        geneIds = input_gene_set,
+        universeGeneIds = universe_genes,
         annotation = "org.Sc.sgd.db",
         categoryName = "GO",
         ontology = y,
@@ -475,16 +476,16 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
 
     #' extract some results and move out filtering
     res_1 <- lapply(ont, function(y) {
-      hgOver <- res[[y]]
+      hg_over <- res[[y]]
       tmp <- cbind(setNames(
         tibble(
-          ID = names(pvalues(hgOver)),
+          ID = names(pvalues(hg_over)),
           Term = Term(ID),
-          pvalues = pvalues(hgOver),
-          oddsRatios = oddsRatios(hgOver),
-          expectedCounts = expectedCounts(hgOver),
-          geneCounts = geneCounts(hgOver),
-          universeCounts = universeCounts(hgOver)
+          pvalues = pvalues(hg_over),
+          oddsRatios = oddsRatios(hg_over),
+          expectedCounts = expectedCounts(hg_over),
+          geneCounts = geneCounts(hg_over),
+          universeCounts = universeCounts(hg_over)
         ),
         c(
           "GO_ID", "Description", "Pvalue", "OddsRatio",
@@ -508,8 +509,8 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
   res <- list()
   res$stats_clusters <- df_sub # selected clusters
   res$plot_profiles <- clus_p # plot cluster profiles
-  res$stats_Kegg_Goslim_annotation <- kego # KEGG AND GO SLIM ANNOTATION
-  res$stats_Goterms_enrichment <- goen # GO TERMS ENRICHMENT
+  res$stats_kegg_goslim_annotation <- kego # KEGG AND GO SLIM ANNOTATION
+  res$stats_goterms_enrichment <- goen # GO TERMS ENRICHMENT
   return(res)
 }
 
@@ -571,23 +572,23 @@ gene_network <- function(data = NULL, data_symb = NULL,
   df_symb$Label <- label
 
   ## Compute empirical correlation matrix
-  corrGenes <- cor(t(as.matrix(data[, -1])),
+  corr_genes <- cor(t(as.matrix(data[, -1])),
     method = "pearson",
     use = "pairwise.complete.obs"
   )
 
   ## Subset correlation matrix based on the cluster filtering
-  A <- corrGenes[index, index]
+  corr_genes <- corr_genes[index, index]
   ## Diagonal value (1's) put to 0 to avoid showing edges from/to the same gene
-  diag(A) <- 0
+  diag(corr_genes) <- 0
 
   ## Subset correlation matrix based on threshold=0.6
   ## wl-27-07-2020, Mon: need another threshold?
-  A <- (A > thres_corr)
-  A <- ifelse(A == TRUE, 1, 0)
+  corr_genes <- (corr_genes > thres_corr)
+  corr_genes <- ifelse(corr_genes == TRUE, 1, 0)
 
   ## Generate network
-  net <- network::network(A, directed = FALSE)
+  net <- network::network(corr_genes, directed = FALSE)
 
   #' wl-28-07-2020, Tue: add an vertex attribute and use 'Set2' in
   #'  RColorBrewer but the max. number of colors is 8 in 'Set2'
@@ -612,7 +613,7 @@ gene_network <- function(data = NULL, data_symb = NULL,
   #' net_p
 
   ## Impact and betweenness
-  btw <- sna::betweenness(A) # or use 'net' instead of 'A'
+  btw <- sna::betweenness(corr_genes)
   impact <- apply(data[index, -1], 1, norm, type = "2") # L2 norm
 
   df_res <- data.frame(
@@ -691,9 +692,9 @@ gene_network <- function(data = NULL, data_symb = NULL,
   df_res2 <- df_res[, -c(4, 5)]
   names(df_res2) <- c("Knockout", "Impact", "Betweenness", "Position")
 
-  gene.cluster <- df_symb[, c("Knockout", "Label")]
-  names(gene.cluster) <- c("Knockout", "Cluster")
-  df_res3 <- merge(df_res2, gene.cluster, by = "Knockout", all.x = TRUE)
+  gene_cluster <- df_symb[, c("Knockout", "Label")]
+  names(gene_cluster) <- c("Knockout", "Cluster")
+  df_res3 <- merge(df_res2, gene_cluster, by = "Knockout", all.x = TRUE)
 
   #' wl-28-07-2020, Tue: better to return df_tab instead of df_tab2
   df_tab <- data.frame(table(df_res3$Cluster, df_res3$Position))
@@ -708,7 +709,7 @@ gene_network <- function(data = NULL, data_symb = NULL,
   res$plot_pnet <- net_p # plot gene network
   res$plot_impact_betweenness <- im_be_p # plot impact betweenees
   res$stats_impact_betweenness <- df_res3 # impact betweenees data
-  res$stats_impact_betweenness_by_cluster <- df_tab2 # plot position by cluster
+  res$stats_impact_betweenness_clus <- df_tab2 # plot position by cluster
   ## wl-28-07-2020, Tue: return this one as well
   res$stats_impact_betweenness_tab <- df_tab # contingency table
   return(res)

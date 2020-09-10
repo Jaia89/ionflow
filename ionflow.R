@@ -34,8 +34,8 @@ str_vec <- function(x) {
   x <- gsub("^[ \t]+|[ \t]+$", "", x) #' trim white spaces
 }
 
-pkgs <- c("optparse", "reshape2", "plyr", "dplyr", "tidyr", "ggplot2", "ggrepel",
-          "corrplot", "gplots", "network", "sna", "GGally",
+pkgs <- c("optparse", "reshape2", "plyr", "dplyr", "tidyr", "ggplot2",
+          "ggrepel", "corrplot", "gplots", "network", "sna", "GGally",
           "org.Sc.sgd.db", "GO.db", "GOstats")
 suppressPackageStartupMessages(invisible(lapply(pkgs, library,
                                                 character.only = TRUE)))
@@ -274,11 +274,11 @@ pdf(file = opt$exp_anal_pdf, onefile = T) # ,width=15, height=10)
 exp_anal <- exploratory_analysis(data = pre_proc$data_wide)
 
 ## dev.control(displaylist="enable")
-## exp_anal$plot_Pearson_correlation
+## exp_anal$plot_pearson_correlation
 ## exp_anal$plot_heatmap
 ## exp_anal$plot_pairwise_correlation_map
 exp_anal$plot_correlation_network
-exp_anal$plot_pca_Individual
+exp_anal$plot_pca_individual
 dev.off()
 
 ## ==== Gene Clustering ====
@@ -293,9 +293,9 @@ dev.off()
 
 write.table(gene_clus$stats_clusters, file = opt$clus_out,
             sep = "\t", row.names = FALSE)
-write.table(gene_clus$stats_Kegg_Goslim_annotation, file = opt$anno_out,
+write.table(gene_clus$stats_kegg_goslim_annotation, file = opt$anno_out,
             sep = "\t", row.names = FALSE)
-write.table(gene_clus$stats_Goterms_enrichment, file = opt$enri_out,
+write.table(gene_clus$stats_goterms_enrichment, file = opt$enri_out,
             sep = "\t", row.names = FALSE)
 
 ## ==== Gene Network ====
