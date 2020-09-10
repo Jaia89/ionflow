@@ -2,33 +2,33 @@
 #' wl-06-07-2020, Mon:
 #'  - Find '<<-'. Should be '<-'
 #'  - Global data sets: data_GOslim and data_ORF2KEGG are used in
-#'    GeneClustering.
+#'    gene_clustering.
 #' wl-12-07-2020, Sun: Find where NAs come from (caused by reshape2:dcast)
-#' wl-13-07-2020, Mon: Handle NAs in PreProcessing
+#' wl-13-07-2020, Mon: Handle NAs in pre_processing
 #' wl-14-07-2020, Tue:
-#'   - Fix a bug in GeneNetwork.
+#'   - Fix a bug in gene_network.
 #'   - Option for PCA computation: use R core package stats
 #' wl-17-07-2020, Fri: Find more bugs in network analysis.
-#' wl-22-07-2020, Wed: Re-write PreProcessing function. Add option to omit NAs
+#' wl-22-07-2020, Wed: Re-write pre_processing function. Add option to omit NAs
 #'   in wide format.
 #' wl-23-07-2020, Thu: Debug function for converting long to widedata format.
 #'   Also check NAs in wide format. If use 'length', the zero is NAs in
 #'   wide format.
-#' wl-25-07-2020, Sat: Simplify GeneClustering
+#' wl-25-07-2020, Sat: Simplify gene_clustering
 #' wl-27-07-2020, Mon: Simplify GeneNetWork
 #' wl-30-07-2020, Thu:
-#'   - GeneNetwork: Keep the largest cluster
-#'   - PreProcessing: Change user provided sd format. Two columns: Ion and sd
+#'   - gene_network: Keep the largest cluster
+#'   - pre_processing: Change user provided sd format. Two columns: Ion and sd
 #'   - Test on data subset: fewer batches and fewer Ion items
-#' wl-04-08-2020, Tue: re-write GeneClustering. Correct one mistake
+#' wl-04-08-2020, Tue: re-write gene_clustering. Correct one mistake
 #' wl-14-08-2020, Fri: remove two R packages "pheatmap", "qgraph"
-#' wl-01-09-2020, Tue: Change data prparation in PreProcessing
-#' wl-02-09-2020, Wed: change variable names in PreProcessing
+#' wl-01-09-2020, Tue: Change data prparation in pre_processing
+#' wl-02-09-2020, Wed: change variable names in pre_processing
 
 #' =======================================================================
 #'
-PreProcessing <- function(data = NULL, stdev = NULL, var_id = 1,
-                          batch_id = 2, data_id = 3) {
+pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
+                           batch_id = 2, data_id = 3) {
 
   ## -------------------> Import data
   ## get raw data stats summary
@@ -66,10 +66,10 @@ PreProcessing <- function(data = NULL, stdev = NULL, var_id = 1,
     lowerq <- quantile(x$Concentration, na.rm = T)[2]
     upperq <- quantile(x$Concentration, na.rm = T)[4]
     iqr <- upperq - lowerq
-    extreme.t.upper <- (iqr * 3) + upperq
-    extreme.t.lower <- lowerq - (iqr * 3)
-    x$Outlier <- ifelse((x$Concentration > extreme.t.upper) |
-      (x$Concentration < extreme.t.lower), 1, 0)
+    extreme_upper <- (iqr * 3) + upperq
+    extreme_lower <- lowerq - (iqr * 3)
+    x$Outlier <- ifelse((x$Concentration > extreme_upper) |
+      (x$Concentration < extreme_lower), 1, 0)
     return(x)
   })
 
@@ -214,22 +214,22 @@ PreProcessing <- function(data = NULL, stdev = NULL, var_id = 1,
 
   ## -------------------> Output
   res <- list()
-  res$stats.raw_data <- df_raw # raw data
-  res$stats.outliers <- df_outlier # outliers
-  res$stats.batch_data <- df_bat # batch corrected data
-  res$stats.stand_data <- df_std # standardised data
-  res$data.long_bat <- data_long # with Batch_ID
-  res$data.long <- data_long_unique # without Batch_ID
-  res$data.wide <- data_wide_unique
-  res$data.wide_symb <- data_wide_unique_symb
-  res$plot.dot <- p1
-  res$plot.hist <- p2
+  res$stats_raw_data <- df_raw # raw data
+  res$stats_outliers <- df_outlier # outliers
+  res$stats_batch_data <- df_bat # batch corrected data
+  res$stats_stand_data <- df_std # standardised data
+  res$data_long_bat <- data_long # with Batch_ID
+  res$data_long <- data_long_unique # without Batch_ID
+  res$data_wide <- data_wide_unique
+  res$data_wide_symb <- data_wide_unique_symb
+  res$plot_dot <- p1
+  res$plot_hist <- p2
   return(res)
 }
 
 #' =======================================================================
 #'
-ExploratoryAnalysis <- function(data = NULL) {
+exploratory_analysis <- function(data = NULL) {
 
   ## -------------------> Correlation
   col3 <- colorRampPalette(c("steelblue4", "white", "firebrick"))
@@ -257,9 +257,9 @@ ExploratoryAnalysis <- function(data = NULL) {
   #' names(pca_scores) <- dfn
 
   #' PCA loading
-  PCA_loadings <- data.frame(pca$rotation)
-  rownames(PCA_loadings) <- data$Knockout
-  PCA_loadings <- PCA_loadings[, 1:2]
+  pca_loadings <- data.frame(pca$rotation)
+  rownames(pca_loadings) <- data$Knockout
+  pca_loadings <- pca_loadings[, 1:2]
 
   #' PCA plot using ggplot2
   pca_p <-
@@ -333,25 +333,25 @@ ExploratoryAnalysis <- function(data = NULL) {
 
   ## -------------------> Output
   res <- list()
-  res$plot.Pearson_correlation <- p_corr
-  res$plot.PCA_Individual <- pca_p
-  res$data.PCA_loadings <- PCA_loadings
-  res$plot.heatmap <- pheat
-  res$plot.pairwise_correlation_map <- pcm
-  ## res$plot.regularized_partial_correlation_network <- Graph_lasso
-  res$plot.correlation_network <- net_p
+  res$plot_Pearson_correlation <- p_corr
+  res$plot_pca_Individual <- pca_p
+  res$data_pca_loadings <- pca_loadings
+  res$plot_heatmap <- pheat
+  res$plot_pairwise_correlation_map <- pcm
+  ## res$plot_regularized_partial_correlation_network <- Graph_lasso
+  res$plot_correlation_network <- net_p
   return(res)
 }
 
 #' =======================================================================
 #'
-GeneClustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
+gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
                            thres_anno = 5) {
 
   ## -------------------> Define clusters
-  res.dist <- dist(data_symb[, -1], method = "manhattan") #' "euclidean"
-  res.hc <- hclust(d = res.dist, method = "single")
-  clus <- cutree(res.hc, h = 0) # distance 0
+  res_dist <- dist(data_symb[, -1], method = "manhattan") #' "euclidean"
+  res_hc <- hclust(d = res_dist, method = "single")
+  clus <- cutree(res_hc, h = 0) # distance 0
 
   data_symb$cluster <- clus
 
@@ -494,7 +494,7 @@ GeneClustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
       Ontology = y
       ) ## %>% dplyr::filter(Pvalue <= 0.05 & Count > 1)
     })
-    res_2 <- do.call("rbind", res_1)
+    do.call("rbind", res_1)
   })
 
   names(goen) <- paste0("Cluster ", df_sub[[1]], " (", df_sub[[2]], " genes)")
@@ -506,22 +506,22 @@ GeneClustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
 
   ## -------------------> Output
   res <- list()
-  res$stats.clusters <- df_sub # selected clusters
-  res$plot.profiles <- clus_p # plot cluster profiles
-  res$stats.Kegg_Goslim_annotation <- kego # KEGG AND GO SLIM ANNOTATION
-  res$stats.Goterms_enrichment <- goen # GO TERMS ENRICHMENT
+  res$stats_clusters <- df_sub # selected clusters
+  res$plot_profiles <- clus_p # plot cluster profiles
+  res$stats_Kegg_Goslim_annotation <- kego # KEGG AND GO SLIM ANNOTATION
+  res$stats_Goterms_enrichment <- goen # GO TERMS ENRICHMENT
   return(res)
 }
 
 #' =======================================================================
 #'
-GeneNetwork <- function(data = NULL, data_symb = NULL,
+gene_network <- function(data = NULL, data_symb = NULL,
                         thres_clus = 10, thres_corr = 0.6) {
 
   ## Cluster of gene with same profile
-  res.dist <- dist(data_symb[, -1], method = "manhattan")
-  res.hc <- hclust(d = res.dist, method = "single")
-  clus <- cutree(res.hc, h = 0) # distance 0
+  res_dist <- dist(data_symb[, -1], method = "manhattan")
+  res_hc <- hclust(d = res_dist, method = "single")
+  clus <- cutree(res_hc, h = 0) # distance 0
 
   data_symb$cluster <- clus
 
@@ -545,9 +545,9 @@ GeneNetwork <- function(data = NULL, data_symb = NULL,
   ## cluster labels with info of accumulation/decumulation of Ions
   ## (high/lower abundance)
   ## Assign label
-  df.symb <- data_symb[index, ]
-  lab <- plyr::ddply(df.symb, "cluster", function(x) {
-    mat <- x[, !names(df.symb) %in% c("Knockout", "cluster")]
+  df_symb <- data_symb[index, ]
+  lab <- plyr::ddply(df_symb, "cluster", function(x) {
+    mat <- x[, !names(df_symb) %in% c("Knockout", "cluster")]
     res <- NULL
     if (length(names(which(colSums(mat == 1) > 0))) > 0) {
       res <- paste0(names(which(colSums(mat == 1) > 0)), "(+)")
@@ -563,12 +563,12 @@ GeneNetwork <- function(data = NULL, data_symb = NULL,
   df_sub <- cbind(df_sub, label = lab[, 2])
 
   #' get cluster+gene+label names
-  label <- sapply(df.symb$cluster, function(x) {
+  label <- sapply(df_symb$cluster, function(x) {
     tmp <- df_sub[df_sub$cluster == x, ]
     res <- paste0("Cluster ", tmp[1], " (", tmp[2], " genes)")
     res <- paste(res, tmp[3], sep = ": ")
   })
-  df.symb$Label <- label
+  df_symb$Label <- label
 
   ## Compute empirical correlation matrix
   corrGenes <- cor(t(as.matrix(data[, -1])),
@@ -593,8 +593,8 @@ GeneNetwork <- function(data = NULL, data_symb = NULL,
   #'  RColorBrewer but the max. number of colors is 8 in 'Set2'
   #' wl-29-07-2020, Wed: Some layouts: circle, fruchtermanreingold,
   #'  kamadakawai, spring
-  net %v% "Label" <- df.symb$Label
-  tmp <- unique(df.symb$Label)
+  net %v% "Label" <- df_symb$Label
+  tmp <- unique(df_symb$Label)
   ## fix a bug (may from ggnet2)
   if (length(tmp) != 1) {
     cpy <- rainbow(length(tmp))
@@ -615,7 +615,7 @@ GeneNetwork <- function(data = NULL, data_symb = NULL,
   btw <- sna::betweenness(A) # or use 'net' instead of 'A'
   impact <- apply(data[index, -1], 1, norm, type = "2") # L2 norm
 
-  df.res <- data.frame(
+  df_res <- data.frame(
     Knockout = data$Knockout[index],
     impact = round(impact, 3),
     betweenness = round(btw, 3),
@@ -642,15 +642,15 @@ GeneNetwork <- function(data = NULL, data_symb = NULL,
     )
     ))
   )
-  rownames(df.res) <- data$Knockout[index]
+  rownames(df_res) <- data$Knockout[index]
 
-  q1 <- row.names(subset(df.res, (impact < quantile(impact, .75)) &
+  q1 <- row.names(subset(df_res, (impact < quantile(impact, .75)) &
     (log.betweenness < quantile(log.betweenness, .75))))
-  q2 <- row.names(subset(df.res, (impact < quantile(impact, .75)) &
+  q2 <- row.names(subset(df_res, (impact < quantile(impact, .75)) &
     (log.betweenness > quantile(log.betweenness, .75))))
-  q3 <- row.names(subset(df.res, (impact > quantile(impact, .75)) &
+  q3 <- row.names(subset(df_res, (impact > quantile(impact, .75)) &
     (log.betweenness < quantile(log.betweenness, .75))))
-  q4 <- row.names(subset(df.res, (impact > quantile(impact, .75)) &
+  q4 <- row.names(subset(df_res, (impact > quantile(impact, .75)) &
     (log.betweenness > quantile(log.betweenness, .75))))
 
   #' idx <- unique(c(sample(q1,6),sample(q2,6),sample(q3,6),sample(q4,6)))
@@ -664,10 +664,10 @@ GeneNetwork <- function(data = NULL, data_symb = NULL,
   })
   idx <- unique(unlist(idx))
 
-  df.idx <- df.res[idx, ]
+  df_idx <- df_res[idx, ]
 
   im_be_p <-
-    ggplot(data = df.res, aes(x = impact, y = log.betweenness)) +
+    ggplot(data = df_res, aes(x = impact, y = log.betweenness)) +
     geom_point(aes(col = pos.label), alpha = .3, size = 3) +
     scale_color_manual(values = c(
       "plum4", "palegreen4", "indianred",
@@ -678,38 +678,38 @@ GeneNetwork <- function(data = NULL, data_symb = NULL,
     theme(legend.position = "bottom") +
     guides(colour = guide_legend(nrow = 2)) +
     theme(legend.title = element_blank()) +
-    geom_text_repel(data = df.idx, aes(label = Knockout), size = 3.5) +
-    geom_vline(xintercept = quantile(df.res$impact, .75), linetype = "dashed") +
+    geom_text_repel(data = df_idx, aes(label = Knockout), size = 3.5) +
+    geom_vline(xintercept = quantile(df_res$impact, .75), linetype = "dashed") +
     geom_hline(
-      yintercept = quantile(df.res$log.betweenness, .75),
+      yintercept = quantile(df_res$log.betweenness, .75),
       linetype = "dashed"
     ) +
     xlab("Impact") +
     ylab("Log(betweenness+1)")
 
-  rownames(df.res) <- c()
-  df.res2 <- df.res[, -c(4, 5)]
-  names(df.res2) <- c("Knockout", "Impact", "Betweenness", "Position")
+  rownames(df_res) <- c()
+  df_res2 <- df_res[, -c(4, 5)]
+  names(df_res2) <- c("Knockout", "Impact", "Betweenness", "Position")
 
-  gene.cluster <- df.symb[, c("Knockout", "Label")]
+  gene.cluster <- df_symb[, c("Knockout", "Label")]
   names(gene.cluster) <- c("Knockout", "Cluster")
-  df.res3 <- merge(df.res2, gene.cluster, by = "Knockout", all.x = TRUE)
+  df_res3 <- merge(df_res2, gene.cluster, by = "Knockout", all.x = TRUE)
 
-  #' wl-28-07-2020, Tue: better to return df.tab instead of df.tab2
-  df.tab <- data.frame(table(df.res3$Cluster, df.res3$Position))
-  names(df.tab) <- c("Cluster", "Position", "nGenes")
-  df.tab <- dplyr::arrange(df.tab, desc(nGenes))
-  df.tab2 <- df.tab %>%
+  #' wl-28-07-2020, Tue: better to return df_tab instead of df_tab2
+  df_tab <- data.frame(table(df_res3$Cluster, df_res3$Position))
+  names(df_tab) <- c("Cluster", "Position", "nGenes")
+  df_tab <- dplyr::arrange(df_tab, desc(nGenes))
+  df_tab2 <- df_tab %>%
     dplyr::group_by(Cluster) %>%
     top_n(1, nGenes)
 
   ## -------------------> Output
   res <- list()
-  res$plot.pnet <- net_p # plot gene network
-  res$plot.impact_betweenness <- im_be_p # plot impact betweenees
-  res$stats.impact_betweenness <- df.res3 # impact betweenees data
-  res$stats.impact_betweenness_by_cluster <- df.tab2 # plot position by cluster
+  res$plot_pnet <- net_p # plot gene network
+  res$plot_impact_betweenness <- im_be_p # plot impact betweenees
+  res$stats_impact_betweenness <- df_res3 # impact betweenees data
+  res$stats_impact_betweenness_by_cluster <- df_tab2 # plot position by cluster
   ## wl-28-07-2020, Tue: return this one as well
-  res$stats.impact_betweenness_tab <- df.tab # contingency table
+  res$stats_impact_betweenness_tab <- df_tab # contingency table
   return(res)
 }

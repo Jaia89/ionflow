@@ -1,13 +1,13 @@
 #' wl-03-07-2020, Fri: Load packages here.
 #' wl-03-07-2020, Fri: qgraph loads plenty of R packages
-#' wl-06-07-2020, Mon: debug functions PreProcessing and ExploratoryAnalysis
+#' wl-06-07-2020, Mon: debug functions pre_processing and exploratory_analysis
 #' wl-30-07-2020, Thu: test on subset of IonData
 #' wl-07-08-2020, Fri: re-write for galaxy
 #' wl-08-08-2020, Sat: works for both in command line and interactive mode
 #' wl-09-08-2020, Sun: recordPlot has problem for command line mode.
 #' wl-10-08-2020, Mon: sort out the base graphics saving via non-interactive
 #'  mode.
-#' wl-02-09-2020, Wed: change for PreProcessing
+#' wl-02-09-2020, Wed: change for pre_processing
 
 ## ==== General settings ====
 rm(list = ls(all = T))
@@ -240,30 +240,30 @@ if (opt$std_file_sel == "yes") {
 
 ## ==== Pre-processing ====
 
-pre_proc <- PreProcessing(data = ion_data, stdev = std_data,
+pre_proc <- pre_processing(data = ion_data, stdev = std_data,
                           var_id = opt$var_id, batch_id = opt$batch_id,
                           data_id = opt$data_id)
 
 #' save plot in pdf
 pdf(file = opt$pre_proc_pdf, onefile = T, width=15, height=10)
-plot(pre_proc$plot.dot)
-plot(pre_proc$plot.hist)
+plot(pre_proc$plot_dot)
+plot(pre_proc$plot_hist)
 dev.off()
 
 #' bind stats
-df_stats <- list(raw_data = pre_proc$stats.raw_data,
-                 bat_data = pre_proc$stats.batch_data,
-                 std_data = pre_proc$stats.stand_data)
+df_stats <- list(raw_data = pre_proc$stats_raw_data,
+                 bat_data = pre_proc$stats_batch_data,
+                 std_data = pre_proc$stats_stand_data)
 df_stats <- dplyr::bind_rows(df_stats, .id = "Data_Set")
 row.names(df_stats) = NULL
 
 #' save tables
 write.table(df_stats, file = opt$df_stats_out, sep = "\t", row.names = F)
-write.table(pre_proc$stats.outliers, file = opt$outl_out, sep = "\t",
+write.table(pre_proc$stats_outliers, file = opt$outl_out, sep = "\t",
             row.names = F)
-write.table(pre_proc$data.wide, file = opt$data_wide_out, sep = "\t",
+write.table(pre_proc$data_wide, file = opt$data_wide_out, sep = "\t",
             row.names = F)
-write.table(pre_proc$data.wide_symb, file = opt$data_wide_symb_out,
+write.table(pre_proc$data_wide_symb, file = opt$data_wide_symb_out,
             sep = "\t", row.names = F)
 
 ## ==== Exploratory analysis ====
@@ -271,46 +271,46 @@ write.table(pre_proc$data.wide_symb, file = opt$data_wide_symb_out,
 #' wl-10-08-2020, Mon: Base graphics saving does not work for
 #' non-interactive mode. use this dirt trick.
 pdf(file = opt$exp_anal_pdf, onefile = T) # ,width=15, height=10)
-exp_anal <- ExploratoryAnalysis(data = pre_proc$data.wide)
+exp_anal <- exploratory_analysis(data = pre_proc$data_wide)
 
 ## dev.control(displaylist="enable")
-## exp_anal$plot.Pearson_correlation
-## exp_anal$plot.heatmap
-## exp_anal$plot.pairwise_correlation_map
-exp_anal$plot.correlation_network
-exp_anal$plot.PCA_Individual
+## exp_anal$plot_Pearson_correlation
+## exp_anal$plot_heatmap
+## exp_anal$plot_pairwise_correlation_map
+exp_anal$plot_correlation_network
+exp_anal$plot_pca_Individual
 dev.off()
 
 ## ==== Gene Clustering ====
-gene_clus <- GeneClustering(data = pre_proc$data.wide,
-                            data_symb = pre_proc$data.wide_symb,
+gene_clus <- gene_clustering(data = pre_proc$data_wide,
+                            data_symb = pre_proc$data_wide_symb,
                             thres_clus = opt$thres_clus,
                             thres_anno = opt$thres_anno)
 
 pdf(file = opt$gene_clus_pdf, onefile = T, width=15, height=10)
-gene_clus$plot.profiles
+gene_clus$plot_profiles
 dev.off()
 
-write.table(gene_clus$stats.clusters, file = opt$clus_out,
+write.table(gene_clus$stats_clusters, file = opt$clus_out,
             sep = "\t", row.names = FALSE)
-write.table(gene_clus$stats.Kegg_Goslim_annotation, file = opt$anno_out,
+write.table(gene_clus$stats_Kegg_Goslim_annotation, file = opt$anno_out,
             sep = "\t", row.names = FALSE)
-write.table(gene_clus$stats.Goterms_enrichment, file = opt$enri_out,
+write.table(gene_clus$stats_Goterms_enrichment, file = opt$enri_out,
             sep = "\t", row.names = FALSE)
 
 ## ==== Gene Network ====
-gene_net <- GeneNetwork(data = pre_proc$data.wide,
-                        data_symb = pre_proc$data.wide_symb,
+gene_net <- gene_network(data = pre_proc$data_wide,
+                        data_symb = pre_proc$data_wide_symb,
                         thres_clus = opt$thres_clus,
                         thres_corr = opt$thres_corr)
 
 pdf(file = opt$gene_net_pdf, onefile = T, width=15, height=10)
-gene_net$plot.pnet
-gene_net$plot.impact_betweenness
+gene_net$plot_pnet
+gene_net$plot_impact_betweenness
 dev.off()
 
-write.table(gene_net$stats.impact_betweenness, file = opt$imbe_out,
+write.table(gene_net$stats_impact_betweenness, file = opt$imbe_out,
             sep = "\t", row.names = FALSE)
-write.table(gene_net$stats.impact_betweenness_tab, file = opt$imbe_tab_out,
+write.table(gene_net$stats_impact_betweenness_tab, file = opt$imbe_tab_out,
             sep = "\t", row.names = FALSE)
 
