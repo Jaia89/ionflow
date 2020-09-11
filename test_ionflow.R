@@ -8,8 +8,8 @@
 rm(list = ls(all = T))
 #' set.seed(123)
 
-#' tool_dir <- "C:/R_lwc/r_data/icl/"
-tool_dir <- "~/my_galaxy/ionflow/"
+tool_dir <- "C:/R_lwc/ionflow/"
+#' tool_dir <- "~/my_galaxy/ionflow/"
 setwd(tool_dir)
 pkgs <- c("optparse", "reshape2", "plyr", "dplyr", "tidyr", "ggplot2", 
           "ggrepel", "corrplot", "gplots", "network", "sna", "GGally",
