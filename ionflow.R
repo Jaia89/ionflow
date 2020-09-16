@@ -13,14 +13,14 @@
 rm(list = ls(all = T))
 
 #' flag for command-line use or not. If false, only for debug interactively.
-com_f <- T
+com_f <- F
 
 #' galaxy will stop even if R has warning message
 options(warn = -1) #' disable R warning. Turn back: options(warn=0)
 
 #' ------------------------------------------------------------------------
 #' Setup R error handling to go to stderr
-#' options( show.error.messages=F, error = function (){
+#' options( show.error.messages=F, error = function () {
 #'   cat( geterrmessage(), file=stderr() )
 #'   q( "no", 1, F )
 #' })
@@ -173,9 +173,9 @@ if (com_f) {
     args = commandArgs(trailingOnly = TRUE)
   )
 } else {
-  #' tool_dir <- "C:/R_lwc/my_galaxy/ionflow/"         #' for windows
-  #' tool_dir <- "~/my_galaxy/ionflow/"   #' for linux. Must be case-sensitive
-  tool_dir <- "~/R_lwc/r_data/icl/"       #' for linux. Must be case-sensitive
+  #' tool_dir <- "C:/R_lwc/my_galaxy/ionflow/"
+  tool_dir <- "~/my_galaxy/ionflow/"
+  #' tool_dir <- "~/R_lwc/r_data/icl/"
 
   opt <- list(
 
@@ -245,7 +245,7 @@ pre_proc <- pre_processing(data = ion_data, stdev = std_data,
                           data_id = opt$data_id)
 
 #' save plot in pdf
-pdf(file = opt$pre_proc_pdf, onefile = T, width=15, height=10)
+pdf(file = opt$pre_proc_pdf, onefile = T, width = 15, height = 10)
 plot(pre_proc$plot_dot)
 plot(pre_proc$plot_hist)
 dev.off()
@@ -255,7 +255,7 @@ df_stats <- list(raw_data = pre_proc$stats_raw_data,
                  bat_data = pre_proc$stats_batch_data,
                  std_data = pre_proc$stats_stand_data)
 df_stats <- dplyr::bind_rows(df_stats, .id = "Data_Set")
-row.names(df_stats) = NULL
+row.names(df_stats)  <- NULL
 
 #' save tables
 write.table(df_stats, file = opt$df_stats_out, sep = "\t", row.names = F)
@@ -273,10 +273,10 @@ write.table(pre_proc$data_wide_symb, file = opt$data_wide_symb_out,
 pdf(file = opt$exp_anal_pdf, onefile = T) # ,width=15, height=10)
 exp_anal <- exploratory_analysis(data = pre_proc$data_wide)
 
-## dev.control(displaylist="enable")
-## exp_anal$plot_pearson_correlation
-## exp_anal$plot_heatmap
-## exp_anal$plot_pairwise_correlation_map
+#' dev.control(displaylist="enable")
+#' exp_anal$plot_pearson_correlation
+#' exp_anal$plot_heatmap
+#' exp_anal$plot_pairwise_correlation_map
 exp_anal$plot_correlation_network
 exp_anal$plot_pca_individual
 dev.off()
@@ -287,7 +287,7 @@ gene_clus <- gene_clustering(data = pre_proc$data_wide,
                             thres_clus = opt$thres_clus,
                             thres_anno = opt$thres_anno)
 
-pdf(file = opt$gene_clus_pdf, onefile = T, width=15, height=10)
+pdf(file = opt$gene_clus_pdf, onefile = T, width = 15, height = 10)
 gene_clus$plot_profiles
 dev.off()
 
@@ -313,4 +313,3 @@ write.table(gene_net$stats_impact_betweenness, file = opt$imbe_out,
             sep = "\t", row.names = FALSE)
 write.table(gene_net$stats_impact_betweenness_tab, file = opt$imbe_tab_out,
             sep = "\t", row.names = FALSE)
-
