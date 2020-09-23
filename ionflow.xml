@@ -2,6 +2,8 @@
 wl-10-08-2020, Mon: commence
 wl-24-08-2020, Mon: first version
 wl-09-09-2020, Wed: add input data index for varaible, batch id and data
+wl-23-09-2020, Wed: add outlier detection, batch correction and similarity
+   measures
 -->
 
 <tool id="ionfow" name="IonFlow" version="0.1.0">
@@ -23,6 +25,9 @@ wl-09-09-2020, Wed: add input data index for varaible, batch id and data
         --var_id '$pre_proc.var_id'
         --batch_id '$pre_proc.batch_id'
         --data_id '$pre_proc.data_id'
+        --method_outl '$pre_proc.method_outl'
+        --method_batch '$pre_proc.method_batch'
+        --scale_batch '$pre_proc.scale_batch'
 
         ## use std file or not
         --std_file_sel '$pre_proc.std.std_file_sel'
@@ -31,9 +36,10 @@ wl-09-09-2020, Wed: add input data index for varaible, batch id and data
         #end if
 
         ## Clustering and network analysis
-        --thres_clus '$thres_clus'
-        --thres_anno '$thres_anno'
-        --thres_corr '$thres_corr'
+        --thres_clus '$clus_net.thres_clus'
+        --thres_anno '$clus_net.thres_anno'
+        --thres_simil '$clus_net.thres_simil'
+        --method_simil '$clus_net.method_simil'
 
         ## output: pre-processing
         --pre_proc_pdf  '$pre_proc_pdf'
@@ -62,7 +68,7 @@ wl-09-09-2020, Wed: add input data index for varaible, batch id and data
   <inputs>
     <param name="ion_file" type="data"  format="tabular"
            label="Ion data table"
-           help="Ion data table with columns of Ions and rows of knockout. 
+           help="Ion data table with columns of Ions and rows of knockout.
                  The first two columns must be names of knowckout and batch ID." />
 
     <section name="pre_proc" title="Pre Processing" >
@@ -79,21 +85,42 @@ wl-09-09-2020, Wed: add input data index for varaible, batch id and data
              label="Specify data start column index of input data"
              help="Indicate which column will be the start of data matrix." />
 
+      <param name="method_outl" type="select"
+             label="Select a method for outlier detection"
+             help="Univariate outlier detection. Currently support 'boxplot',
+                   'median' and 'mean'.">
+            <option value="boxplot" selected="true">boxplot</option>
+            <option value="median">median</option>
+            <option value="mean">mean</option>
+      </param>
+
+      <param name="method_batch" type="select"
+             label="Select a method for batch correction"
+             help="Batch correction method, i.e, shift batch median or mean.">
+            <option value="median" selected="true">median</option>
+            <option value="mean">mean</option>
+      </param>
+
+      <param name="scale_batch" type="boolean"
+              truevalue="TRUE" falsevalue="FALSE" checked="false"
+              label="Scale batch correction with STD"
+              help="Batch shifting followed by division of std or not"/>
+
       <conditional name="std">
         <param name="std_file_sel" type="select"
-              label="Use user defined ion std file or not" 
-              help="Use manul std values or calculation from ion data for 
-                    standardisation.">
+               label="Use user defined ion std file or not"
+               help="Use manul std values or calculation from ion data for
+                     standardisation.">
           <option value="yes" selected="true">Use defined file</option>
           <option value="no">Caculate from data set</option>
         </param>
 
         <when value="yes">
-          <param name="std_file" type="data"  format="tabular" 
-                label="STD file" 
-                help="A data matrix containing only two columns. The fisrt 
-                      column is the names of ion and the second one is std i
-                      values. " />
+          <param name="std_file" type="data"  format="tabular"
+                 label="STD file"
+                 help="A data matrix with only two columns. The fisrt
+                       column is the names of ion and the second one is std
+                       values. " />
         </when>
         <when value="no">
         </when>
@@ -101,19 +128,34 @@ wl-09-09-2020, Wed: add input data index for varaible, batch id and data
 
     </section>
 
-    <param name="thres_clus" type="float" value="10" 
-            label="Specify clustering threshold"
-            help="Gene number threshold in a hierarchical clustering centre." /> 
+    <section name="clus_net" title="Gene clustering and network analysis" >
+      <param name="thres_clus" type="float" value="10.0"
+             label="Specify clustering threshold"
+             help="Gene number threshold in a hierarchical clustering centre." /> 
 
-    <param name="thres_anno" type="float" value="5.0" min="0" max="100"
-           label="Specify annotation percentage threshold"
-           help="Percentage threshold for annotation (0 - 100).
-                 Features large than threshold will be kept." />
+      <param name="thres_anno" type="float" value="5.0" min="0" max="100"
+             label="Specify annotation percentage threshold"
+             help="Percentage threshold for annotation (0 - 100).
+                   Features large than threshold will be kept." />
 
-    <param name="thres_corr" type="float" value="0.60" min="0" max="1"
-           label="Specify correlation threshold"
-           help="Correlation threshold for network analysis (0 - 1).  
-                 Features large than threshold will be kept." /> 
+      <param name="thres_simil" type="float" value="0.6" min="0" max="1"
+             label="Specify similarity threshold"
+             help="Similarity threshold for network analysis (0 - 1).
+                   Features large than threshold will be kept." />
+
+      <param name="method_simil" type="select"
+             label="Select a method for data matrix similarity"
+             help = "Methods for data matrix similarity. Four methods,
+                   'correlation', 'cosine', 'eJaccard' and 'Mahalanobis', are
+                   available. Note that Mahalanobis similarity is converted
+                   from distance." >
+            <option value="correlation" selected="true">Pearson correlation</option>
+            <option value="cosine">cosine similarity</option>
+            <option value="eJaccard">Jaccard similarity</option>
+            <option value="Mahalanobis">Mahalanobis similarity</option>
+      </param>
+
+    </section>
 
   </inputs>
 
@@ -156,11 +198,18 @@ wl-09-09-2020, Wed: add input data index for varaible, batch id and data
   <tests>
     <test>
       <param name="ion_file" value="iondata_test.tsv" />
+      <param name="var_id" value="1" />
+      <param name="batch_id" value="2" />
+      <param name="data_id" value="3" />
+      <param name="method_outl" value="boxplot" />
+      <param name="method_batch" value="median" />
+      <param name="scale_batch" value="F" />
       <param name="std_file_sel" value="yes" />
       <param name="std_file" value="user_std.tsv" />
-      <param name="thres_clus" value="5.0" />
-      <param name="thres_anno" value="10.0" />
-      <param name="thres_corr" value="0.75" />
+      <param name="thres_clus" value="3.0" />
+      <param name="thres_anno" value="5.0" />
+      <param name="thres_simil" value="0.6" />
+      <param name="method_simil" value="cosine" />
       <output name="pre_proc_pdf" file="res/pre_proc.pdf" compare="sim_size" />
       <output name="df_stats_out" file="res/df_stats.tsv" compare="diff" />
       <output name="outl_out" file="res/outl.tsv" compare="diff" />
@@ -178,7 +227,7 @@ wl-09-09-2020, Wed: add input data index for varaible, batch id and data
   </tests>
 
   <!-- =============================================================== -->
-<help>
+  <help>
 IonFlow  Pipeline
 =================
 
@@ -227,17 +276,17 @@ an example with the first two columns of knockout name and batch ID and
 other columns are ions.
 
 
- +----------+----------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
- | Knockout | Batch_ID | Ca      | Cd    | Cu    | Fe     | K        | Mg      | Mo    | Na      | Ni    | P        | S        |
- +----------+----------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
- | YDL227C  | 14       | 59.549  | 0.953 | 2.202 | 10.942 | 3448.070 | 693.992 | 1.603 | 259.816 | 1.573 | 4963.315 | 556.397  |
- +----------+--+-------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
- | YDL227C  | 14       | 62.258  | 0.927 | 2.067 | 26.262 | 3493.741 | 705.008 | 2.691 | 273.640 | 4.443 | 4874.101 | 553.229  |
- +----------+--+-------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
- | YDL227C  | 14       | 65.075  | 0.875 | 2.048 | 10.244 | 3317.611 | 691.411 | 1.878 | 278.167 | 1.448 | 4608.300 | 535.609  |
- +----------+--+-------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
- | YDL227C  | 14       | 56.886  | 0.985 | 2.203 |  9.206 | 3330.854 | 702.734 | 1.396 | 268.609 | 1.640 | 5119.736 | 546.230  |
- +----------+----------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
++----------+----------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
+| Knockout | Batch_ID | Ca      | Cd    | Cu    | Fe     | K        | Mg      | Mo    | Na      | Ni    | P        | S        |
++----------+----------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
+| YDL227C  | 14       | 59.549  | 0.953 | 2.202 | 10.942 | 3448.070 | 693.992 | 1.603 | 259.816 | 1.573 | 4963.315 | 556.397  |
++----------+--+-------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
+| YDL227C  | 14       | 62.258  | 0.927 | 2.067 | 26.262 | 3493.741 | 705.008 | 2.691 | 273.640 | 4.443 | 4874.101 | 553.229  |
++----------+--+-------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
+| YDL227C  | 14       | 65.075  | 0.875 | 2.048 | 10.244 | 3317.611 | 691.411 | 1.878 | 278.167 | 1.448 | 4608.300 | 535.609  |
++----------+--+-------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
+| YDL227C  | 14       | 56.886  | 0.985 | 2.203 |  9.206 | 3330.854 | 702.734 | 1.396 | 268.609 | 1.640 | 5119.736 | 546.230  |
++----------+----------+---------+-------+-------+--------+----------+---------+-------+---------+-------+----------+----------+
 
 |
 
@@ -247,23 +296,23 @@ Standard derivation values can be provide by user or calculated from ion
 data set. These values are used to standardize ion data. The user defined
 std file has tabular format such as:
 
-  +------+----------+
-  |  Ion |   sd     |
-  +------+----------+
-  |  Ca  | 0.150    |
-  +------+----------+
-  |  Fe  | 0.163    |
-  +------+----------+
-  |  K   | 0.094    |
-  +------+----------+
-  |  Mg  | 0.059    |
-  +------+----------+
-  |  Na  | 0.107    |
-  +------+----------+
-  |  Ni  | 0.078    |
-  +------+----------+
-  |  Zn  | 0.067    |
-  +------+----------+
++------+----------+
+|  Ion |   sd     |
++------+----------+
+|  Ca  | 0.150    |
++------+----------+
+|  Fe  | 0.163    |
++------+----------+
+|  K   | 0.094    |
++------+----------+
+|  Mg  | 0.059    |
++------+----------+
+|  Na  | 0.107    |
++------+----------+
+|  Ni  | 0.078    |
++------+----------+
+|  Zn  | 0.067    |
++------+----------+
 
 |
 
@@ -283,12 +332,50 @@ The threshold is for the percentage of the genes in a cluster centre used
 for annotation. The default is 5 percent. Genes with percentage large than
 threshold will be annotated.
 
-**\3. Threshold for correlation**
+**\3. Threshold for similarity**
 
-The threshold is the correlation coefficient cut-off for correlation network
+The threshold is for the similarity cut-off for network
 analysis. Only those large than the threshold will be used in the network
 analysis. The default is 0.6 in the range of 0 and 1.
 
+**\4. Outlier detection**
+
+Three methods, "mean", "median" and "boxplot", are implemented. "mean" is
+less robust. For details, see Wilcox R R, Fundamentals of Modern Statistical
+Methods: Substantially Improving Power and Accuracy, Springer 2010 (2nd edition),
+pages 31-35. Also see R package GmAMisc_.
+
+.. _GmAMisc: https://cran.r-project.org/web/packages/GmAMisc/index.html
+
+- *mean*: an observation is an outlier if the absolute difference between
+  that observation and the sample mean is more than 2 Standard Deviations away
+  from the mean.
+
+- *median*: an observation is an outlier if the absolute difference between
+  the observation and the sample median is larger than the Median Absolute
+  Deviation divided by 0.6745.
+
+- *boxplot*: an observation is an outlier if it is either smaller than the
+  1st quartile minus 1.5 times the interquartile range, or larger than the 3rd
+  quartile minus 1.5 times the interquartile range.
+
+
+**\6. Batch correction**
+
+The batch correction is to remove batch effects by shifting batch median or mean.
+
+**\7. Batch scalling**
+
+The batch correction can be scaled by the stadnard derivation. 
+
+**\8. Similarity measures**
+
+The network extraction is based on the data matrix similarity measures.
+Three widely-used measures, *correlation*, *cosine* and *Jaccard*, and 
+*Mahalanobis similarity*, which is converted from *Mahalanobis distance*, are
+used in the galaxy tools. For details, see R package proxy_.
+
+.. _proxy: https://cran.r-project.org/web/packages/proxy/index.html
 
 Outputs
 ----------
@@ -297,22 +384,17 @@ Outputs
 
 The output includes:
 
-- A PDF file for the plots:  dot-plot with ion vs batch and distribution
-  plot of ions.
-- A tabular file for statistical summary of data set
-- A tabular file for outlier table
-- A tabular file for processed data set
-- A tabular file for the symbolisation data set
+- A PDF file for the plots: dot-plot with ion vs batch and distribution plot of
+  ions. - A tabular file for statistical summary of data set - A tabular file
+  for outlier table - A tabular file for processed data set - A tabular file for
+  the symbolisation data set
 
 **\2. Exploratory analysis**
 
 A single PDF file is output with plots:
 
-- correlation map
-- heatmap with dendrogram,
-- correlation heatmap with dendrogram 
-- correlation network graph
-- PCA plot
+- correlation map heatmap with dendrogram, correlation heatmap with dendrogram
+- correlation network graph PCA plot
 
 **\3. Gene Clustering**
 

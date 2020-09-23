@@ -8,12 +8,14 @@
 #' wl-10-08-2020, Mon: sort out the base graphics saving via non-interactive
 #'  mode.
 #' wl-02-09-2020, Wed: change for pre_processing
+#' wl-22-09-2020, Tue: add more options for batch corrrection, outlier
+#'  detection and network extraction
 
 ## ==== General settings ====
 rm(list = ls(all = T))
 
 #' flag for command-line use or not. If false, only for debug interactively.
-com_f <- F
+com_f <- T
 
 #' galaxy will stop even if R has warning message
 options(warn = -1) #' disable R warning. Turn back: options(warn=0)
@@ -36,7 +38,7 @@ str_vec <- function(x) {
 
 pkgs <- c("optparse", "reshape2", "plyr", "dplyr", "tidyr", "ggplot2",
           "ggrepel", "corrplot", "gplots", "network", "sna", "GGally",
-          "org.Sc.sgd.db", "GO.db", "GOstats")
+          "org.Sc.sgd.db", "GO.db", "GOstats", "proxy")
 suppressPackageStartupMessages(invisible(lapply(pkgs, library,
                                                 character.only = TRUE)))
 
@@ -69,25 +71,27 @@ if (com_f) {
         dest = "verbose", help = "Print little output"
       ),
 
-      #' input
-      make_option("--ion_file",
-        type = "character",
-        help = "ion concentration file in tabular format"
-      ),
+      #' pre-processing
+      make_option("--ion_file", type = "character",
+                  help = "Ion concentration file in tabular format"),
       make_option("--var_id", type = "integer", default = 1,
                   help = "Column index of variable"),
       make_option("--batch_id", type = "integer", default = 2,
                   help = "Column index of batch ID"),
       make_option("--data_id", type = "integer", default = 3,
                   help = "Start column index of data matrix"),
-      make_option("--std_file_sel",
-        type = "character", default = "no",
-        help = "Load user defined std file or not"
-      ),
-      make_option("--std_file",
-        type = "character",
-        help = "user predifined std file with respect to ions"
-      ),
+      make_option("--method_outl", type = "character", default = "boxplot",
+        help = "Methods for univariate outlier detection. Three methods, 
+                'boxplot', 'median' and 'mean', are available."),
+      make_option("--method_batch", type = "character", default = "median",
+        help = "Methods for batch correction. Two methods, 'median' and 
+                'mean', are implemented for batch shifting."),
+      make_option("--scale_batch", type = "logical", default = FALSE,
+        help = "Scale batch correction with STD or not"),
+      make_option("--std_file_sel", type = "character", default = "no",
+        help = "Load user defined std file or not"),
+      make_option("--std_file", type = "character",
+        help = "User predifined std file with respect to ions"),
 
       #' Clustering and network analysis
       make_option("--thres_clus",
@@ -100,11 +104,16 @@ if (com_f) {
         help = "Percentage threshold for annotation (0 - 100).
                 Features large than threshold will be kept."
       ),
-      make_option("--thres_corr",
-        type = "double", default = 0.60,
-        help = "Correlation threshold for network analysis (0 - 1).
+      make_option("--thres_simil",
+        type = "double", default = 0.6,
+        help = "Similarity threshold for network analysis (0 - 1).
                 Features large than threshold will be kept."
       ),
+      make_option("--method_simil", type = "character", 
+        default = "correlation",
+        help = "Methods for data matrix similarity. Four methods, 
+                'correlation', 'cosine', 'eJaccard' and 'Mahalanobis', are 
+                available. It is used for network extraction with threshold."),
 
       #' output: pre-processing
       make_option("--pre_proc_pdf",
@@ -174,23 +183,29 @@ if (com_f) {
   )
 } else {
   #' tool_dir <- "C:/R_lwc/my_galaxy/ionflow/"
-  tool_dir <- "~/my_galaxy/ionflow/"
-  #' tool_dir <- "~/R_lwc/r_data/icl/"
+  #' tool_dir <- "~/my_galaxy/ionflow/"
+  tool_dir <- "~/R_lwc/r_data/icl/"
 
   opt <- list(
 
-    #' Input
+    #' pre-processing
     ion_file = paste0(tool_dir, "test-data/iondata_test.tsv"),
+    #' ion_file = paste0(tool_dir, "test-data/iondata.tsv"),
     var_id = 1,
     batch_id = 2,
     data_id = 3,
+    method_outl = "boxplot", 
+    method_batch = "median",
+    scale_batch = F, 
     std_file_sel = "no",
     std_file = paste0(tool_dir, "test-data/user_std.tsv"),
 
     #' Clustering and network analysis
-    thres_clus = 10.0,
+    thres_clus = 3.0,
     thres_anno = 5.0,
-    thres_corr = 0.6,
+    thres_simil = 0.6,
+    #' method_simil = "correlation",
+    method_simil = "cosine",
 
     #' output: pre-processing
     pre_proc_pdf       = paste0(tool_dir, "test-data/res/pre_proc.pdf"),
@@ -241,8 +256,11 @@ if (opt$std_file_sel == "yes") {
 ## ==== Pre-processing ====
 
 pre_proc <- pre_processing(data = ion_data, stdev = std_data,
-                          var_id = opt$var_id, batch_id = opt$batch_id,
-                          data_id = opt$data_id)
+                           var_id = opt$var_id, batch_id = opt$batch_id,
+                           data_id = opt$data_id,
+                           method_outl = opt$method_outl, 
+                           method_batch = opt$method_batch,
+                           scale_batch = opt$scale_batch)
 
 #' save plot in pdf
 pdf(file = opt$pre_proc_pdf, onefile = T, width = 15, height = 10)
@@ -283,9 +301,9 @@ dev.off()
 
 ## ==== Gene Clustering ====
 gene_clus <- gene_clustering(data = pre_proc$data_wide,
-                            data_symb = pre_proc$data_wide_symb,
-                            thres_clus = opt$thres_clus,
-                            thres_anno = opt$thres_anno)
+                             data_symb = pre_proc$data_wide_symb,
+                             thres_clus = opt$thres_clus,
+                             thres_anno = opt$thres_anno)
 
 pdf(file = opt$gene_clus_pdf, onefile = T, width = 15, height = 10)
 gene_clus$plot_profiles
@@ -300,9 +318,10 @@ write.table(gene_clus$stats_goterms_enrichment, file = opt$enri_out,
 
 ## ==== Gene Network ====
 gene_net <- gene_network(data = pre_proc$data_wide,
-                        data_symb = pre_proc$data_wide_symb,
-                        thres_clus = opt$thres_clus,
-                        thres_corr = opt$thres_corr)
+                         data_symb = pre_proc$data_wide_symb,
+                         method_simil = opt$method_simil,
+                         thres_clus = opt$thres_clus,
+                         thres_simil = opt$thres_simil)
 
 pdf(file = opt$gene_net_pdf, onefile = T, width=15, height=10)
 gene_net$plot_pnet
@@ -313,3 +332,4 @@ write.table(gene_net$stats_impact_betweenness, file = opt$imbe_out,
             sep = "\t", row.names = FALSE)
 write.table(gene_net$stats_impact_betweenness_tab, file = opt$imbe_tab_out,
             sep = "\t", row.names = FALSE)
+

@@ -1,2 +1,5 @@
 "Cluster"	"Position"	"nGenes"
-"Cluster 10 (8 genes): Na(+)"	"High impact, high betweenness"	8
+"Cluster 5 (8 genes): Na(+)"	"High impact, high betweenness"	6
+"Cluster 13 (4 genes): Na(-)"	"High impact, high betweenness"	4
+"Cluster 5 (8 genes): Na(+)"	"Low impact, high betweenness"	2
+"Cluster 13 (4 genes): Na(-)"	"Low impact, high betweenness"	0

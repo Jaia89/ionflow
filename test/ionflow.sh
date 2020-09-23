@@ -5,11 +5,15 @@ Rscript --vanilla ../ionflow.R \
   --var_id "1" \
   --batch_id "2" \
   --data_id "3" \
+  --method_outl "boxplot" \
+  --method_batch "median" \
+  --scale_batch F \
   --std_file_sel "yes" \
   --std_file "../test-data/user_std.tsv" \
-  --thres_clus "5.0" \
-  --thres_anno "10.0" \
-  --thres_corr "0.75" \
+  --thres_clus "3.0" \
+  --thres_anno "5.0" \
+  --thres_simil "0.6" \
+  --method_simil "cosine" \
   --pre_proc_pdf "../test-data/res/pre_proc.pdf" \
   --df_stats_out "../test-data/res/df_stats.tsv" \
   --outl_out     "../test-data/res/outl.tsv" \

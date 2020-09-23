@@ -1,8 +1,5 @@
 "Cluster"	"GO_ID"	"Description"	"Pvalue"	"Count"	"CountUniverse"
-"Cluster 15 (114 genes)"	"GO:0016311"	"dephosphorylation"	0.0221824488246025	7	7
-"Cluster 15 (114 genes)"	"GO:0006066"	"alcohol metabolic process"	0.0387061096837451	6	6
-"Cluster 15 (114 genes)"	"GO:0098655"	"cation transmembrane transport"	0.0387061096837451	6	6
-"Cluster 15 (114 genes)"	"GO:0016787"	"hydrolase activity"	0.0145633691400751	26	34
-"Cluster 15 (114 genes)"	"GO:0008324"	"cation transmembrane transporter activity"	0.0387061096837451	6	6
-"Cluster 15 (114 genes)"	"GO:0022857"	"transmembrane transporter activity"	0.0423419473200103	11	13
-"Cluster 15 (114 genes)"	"GO:0005938"	"cell cortex"	0.0364917709820812	9	10
+"Cluster 9 (115 genes)"	"GO:0051179"	"localization"	0.0301989019115598	29	36
+"Cluster 9 (115 genes)"	"GO:0016787"	"hydrolase activity"	0.0346568085050859	26	32
+"Cluster 9 (115 genes)"	"GO:0015075"	"ion transmembrane transporter activity"	0.0346574779920694	8	8
+"Cluster 13 (4 genes)"	"GO:0000166"	"nucleotide binding"	0.0383561049125832	2	19

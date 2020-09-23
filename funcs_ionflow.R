@@ -25,19 +25,25 @@
 #' wl-01-09-2020, Tue: Change data prparation in pre_processing
 #' wl-02-09-2020, Wed: change variable names in pre_processing
 #' wl-10-09-2020, Thu: apply 'lintr'
+#' wl-23-09-2020, Wed: add outlier detection, batch correction and similarity
+#'  measures.
+#'
 
 #' =======================================================================
-#'
-pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
-                           batch_id = 2, data_id = 3) {
+#' wl-21-09-2020, Mon: add more outlier detection methods.
+#' wl-23-09-2020, Wed: scaling in batch correction may cause problem in
+#'  small data set
+pre_processing <- function(data = NULL, stdev = NULL,
+                           var_id = 1, batch_id = 2, data_id = 3,
+                           method_outl = "boxplot", method_batch = "median",
+                           scale_batch = FALSE) {
 
-  ## -------------------> Import data
-  ## get raw data stats summary
-  ## wl-01-09-2020, Tue: update data set
+  #' -------------------> Import data
+  #' get raw data stats summary
+  #' wl-01-09-2020, Tue: update data set
   data <- data[, c(var_id, batch_id, data_id:ncol(data))]
   names(data)[1:2] <- c("Knockout", "Batch_ID")
   mat <- data[, -c(1:2)]
-  #' mat <- data[, -c(1:(data_id - 1))]
 
   res <- as.data.frame(t(sapply(mat, function(x) {
     c(round(summary(x), 3), round(var(x), 3))
@@ -47,40 +53,44 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
   rownames(res) <- NULL
   df_raw <- res
 
-  ## -------------------> Outlier detection
-  ## wl-22-07-2020, Wed: more general for Ion contents
+  #' -------------------> Outlier detection
+  #' wl-22-07-2020, Wed: more general for Ion contents
   data_long <- reshape2::melt(data,
     id = c("Knockout", "Batch_ID"),
     variable.name = "Ion",
     value.name = "Concentration"
   )
 
-  ## wl-06-07-2020, Mon: convert to factors before using levels function.
-  ## wl-30-07-2020, Thu: replace 'as.factor' with 'factor' in case level
-  ##  updating
+  #' wl-06-07-2020, Mon: convert to factors before using levels function.
+  #' wl-30-07-2020, Thu: replace 'as.factor' with 'factor' in case level
+  #'  updating
   data_long$Knockout <- factor(data_long$Knockout)
   data_long$Ion <- factor(data_long$Ion)
   ion_name <- levels(data_long$Ion)
 
   #' wl-23-07-2020, Thu: get Knockout outliers based on Ion
+  #' data_long <- plyr::ddply(data_long, "Ion", function(x) {
+  #'   lowerq <- quantile(x$Concentration, na.rm = T)[2]
+  #'   upperq <- quantile(x$Concentration, na.rm = T)[4]
+  #'   iqr <- upperq - lowerq
+  #'   extreme_upper <- (iqr * 3) + upperq
+  #'   extreme_lower <- lowerq - (iqr * 3)
+  #'   x$Outlier <- ifelse((x$Concentration > extreme_upper) |
+  #'     (x$Concentration < extreme_lower), 1, 0)
+  #'   return(x)
+  #' })
+
+  #' wl-21-09-2020, Mon: more univariate outlier detection
   data_long <- plyr::ddply(data_long, "Ion", function(x) {
-    lowerq <- quantile(x$Concentration, na.rm = T)[2]
-    upperq <- quantile(x$Concentration, na.rm = T)[4]
-    iqr <- upperq - lowerq
-    extreme_upper <- (iqr * 3) + upperq
-    extreme_lower <- lowerq - (iqr * 3)
-    x$Outlier <- ifelse((x$Concentration > extreme_upper) |
-      (x$Concentration < extreme_lower), 1, 0)
+    x$Outlier <- univa_outl(x$Concentration, method = method_outl)
     return(x)
   })
 
   df_outlier <-
-    data.frame(cbind(
-      levels(data_long$Ion),
-      table(data_long$Ion, data_long$Outlier),
-      round(table(data_long$Ion, data_long$Outlier)[, 2] /
-        dim(data_long)[1] * 100, 2)
-    ))
+    data.frame(cbind(levels(data_long$Ion),
+                     table(data_long$Ion, data_long$Outlier),
+                     round(table(data_long$Ion, data_long$Outlier)[, 2] /
+                           dim(data_long)[1] * 100, 2)))
   rownames(df_outlier) <- c()
   colnames(df_outlier) <- c("Ion", "no_outlier", "outlier", "outlier(%)")
 
@@ -90,14 +100,23 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
   #' wl-23-07-2020, Thu: NAs in wide format due to outlier removal.
   #' con.tab(data_long)  #' NAs: 28 in 1454 Knockout
 
-  ## -------------------> Median batch correction
+  #' -------------------> Median batch correction
   data_long$log <- log(data_long$Concentration)
 
   #' wl-23-07-2020, Thu: remove median of each batch in each Ion
+  #' data_long <- plyr::ddply(data_long, "Ion", function(x) {
+  #'   res <- plyr::ddply(x, "Batch_ID", function(y) {
+  #'     med <- median(y$log)
+  #'     y$log_corr <- y$log - med
+  #'     y
+  #'   })
+  #' })
+
+  #' wl-22-09-2020, Tue: batch correction
   data_long <- plyr::ddply(data_long, "Ion", function(x) {
     res <- plyr::ddply(x, "Batch_ID", function(y) {
-      med <- median(y$log)
-      y$log_corr <- y$log - med
+      y$log_corr <-
+        vec_norm(y$log, method = method_batch, scale = scale_batch)
       y
     })
   })
@@ -109,8 +128,7 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
   names(res)[ncol(res)] <- "Variance"
   df_bat <- res
 
-  ## -------------------> Standardisation
-
+  #' -------------------> Standardisation
   #' wl-08-07-2020, Wed: Use plyr::ddplyr. sds is for Ion
   if (is.null(stdev)) {
     sds <- plyr::ddply(data_long, "Ion", function(x) sd(x$log_corr))
@@ -118,10 +136,10 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
     sds <- as.numeric(as.vector(sds[, 2]))
     names(sds) <- nam
   } else if (ncol(stdev) == 1) {
-    ## wl-30-07-2020, Thu: do NOT use one column. Alway with two columns:
-    ## Ion and std.
+    #' wl-30-07-2020, Thu: do NOT use one column. Alway with two columns:
+    #'  Ion and std.
     sds <- as.numeric(as.vector(stdev[, 1]))
-    names(sds) <- ion_name ## problem if the size is not consistent.
+    names(sds) <- ion_name #' problem if the size is not consistent.
   } else {
     sds <- stdev
     nam <- sds[, 1]
@@ -150,18 +168,18 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
   names(res)[ncol(res)] <- "Variance"
   df_std <- res
 
-  ## -------------------> symbolization
+  #' -------------------> symbolization
   data_long$symb <-
     ifelse((data_long$log_corr_norm > -3) & (data_long$log_corr_norm < 3),
       0, ifelse(data_long$log_corr_norm >= 3, 1, -1)
     )
 
-  ## -------------------> Aggregation of the batch replicas
-  ## wl-13-07-2020, Mon: add prefix and change * as +
+  #' -------------------> Aggregation of the batch replicas
+  #' wl-13-07-2020, Mon: add prefix and change * as +
   dat <- data_long[, c("Knockout", "Ion", "log_corr_norm", "symb")]
   data_long_unique <-
     data.frame(stats::aggregate(. ~ Knockout + Ion, dat, median))
-  ## update symb
+  #' update symb
   data_long_unique$symb <-
     ifelse((data_long_unique$symb < 0.5) & (data_long_unique$symb > -0.5),
       0, ifelse(data_long_unique$symb >= 0.5, 1, -1)
@@ -191,13 +209,8 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
 
   #' wl-02-09-2020, Wed: change 'log_corr' to 'log_corr_norm'
   p1 <-
-    ggplot(
-      data = data_long,
-      aes(
-        x = factor(Batch_ID), y = log_corr_norm,
-        col = factor(Batch_ID)
-      )
-    ) +
+    ggplot(data = data_long, aes(x = factor(Batch_ID), y = log_corr_norm,
+                                 col = factor(Batch_ID))) +
     geom_point(shape = 1) +
     facet_wrap(~Ion) +
     xlab("Batch.ID") +
@@ -213,14 +226,14 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
     ylab("Frequency") +
     geom_vline(xintercept = c(-3, 3), col = "red")
 
-  ## -------------------> Output
+  #' -------------------> Output
   res <- list()
-  res$stats_raw_data <- df_raw # raw data
-  res$stats_outliers <- df_outlier # outliers
-  res$stats_batch_data <- df_bat # batch corrected data
-  res$stats_stand_data <- df_std # standardised data
-  res$data_long_bat <- data_long # with Batch_ID
-  res$data_long <- data_long_unique # without Batch_ID
+  res$stats_raw_data <- df_raw        # raw data
+  res$stats_outliers <- df_outlier    # outliers
+  res$stats_batch_data <- df_bat      # batch corrected data
+  res$stats_stand_data <- df_std      # standardised data
+  res$data_long_bat <- data_long      # with Batch_ID
+  res$data_long <- data_long_unique   # without Batch_ID
   res$data_wide <- data_wide_unique
   res$data_wide_symb <- data_wide_unique_symb
   res$plot_dot <- p1
@@ -232,16 +245,14 @@ pre_processing <- function(data = NULL, stdev = NULL, var_id = 1,
 #'
 exploratory_analysis <- function(data = NULL) {
 
-  ## -------------------> Correlation
+  #' -------------------> Correlation
   col3 <- colorRampPalette(c("steelblue4", "white", "firebrick"))
 
   corrplot.mixed(cor(data[, -1], use = "complete.obs"),
-    number.cex = .7,
-    lower.col = "black", upper.col = col3(100)
-  )
+                 number.cex = .7, lower.col = "black", upper.col = col3(100))
   p_corr <- recordPlot()
 
-  ## -------------------> PCA
+  #' -------------------> PCA
   #' wl-14-07-2020, Tue: Original (trust) pca computation if there is no NAs.
   dat <- t(data[, -1])
   pca <- prcomp(dat, center = T, scale. = F)
@@ -273,34 +284,35 @@ exploratory_analysis <- function(data = NULL) {
     ylab(dfn[2]) +
     labs(title = "PCA")
 
-  ## pca_p
+  #' pca_p
 
-  ## -------------------> HEATMAP
+  #' -------------------> HEATMAP
   #' wl-14-08-2020, Fri:  use ggplots
   heatmap.2(as.matrix(data[, -1]),
     scale = "row", col = bluered(100),
     trace = "none", density.info = "none",
     hclustfun = function(x) hclust(x, method = "ward.D")
   )
+
   #' library(pheatmap)
-  #' pheatmap(data[, -1], show_rownames = F, cluster_cols = T, cluster_rows = T,
+  #' pheatmap(data[, -1], show_rownames = F,
+  #'          cluster_cols = T, cluster_rows = T,
   #'          legend = T, fontsize = 15, clustering_method = "ward.D",
   #'          scale = "row")
   pheat <- recordPlot()
 
-  ## -------------------> PAIRWISE CORRELATION MAP
+  #' -------------------> PAIRWISE CORRELATION MAP
   col <- colorRampPalette(c("skyblue4", "white", "plum4"))(20)
   corr <- cor(na.omit(data[, -1]))
-  heatmap(
-    x = corr, col = col, symm = TRUE, cexRow = 1.4, cexCol = 1.4,
-    main = ""
-  )
+  heatmap(x = corr, col = col, symm = TRUE, cexRow = 1.4, cexCol = 1.4,
+          main = "")
   pcm <- recordPlot()
 
   #' -------------------> Regularized partial correlation network MAP
   #' wl-13-08-2020, Thu: there is no 'qgraph' in conda forge and bio conda.
   #' Have to plot the correlation network instead.
   if (T) {
+
     #' wl-14-08-2020, Fri: debug code only
     #' library(glasso)
     #' corr_reg <- glasso(corr, rho = 0.01)
@@ -311,19 +323,22 @@ exploratory_analysis <- function(data = NULL) {
     net %e% "weight" <- corr
     net %e% "weight_abs" <- abs(corr) * 6
     net %e% "color" <- ifelse(net %e% "weight" > 0, "lightgreen", "coral")
+
     #' set.edge.value(net, "weight", corr)
     #' list.network.attributes(net)
     #' list.edge.attributes(net)
     #' list.vertex.attributes(net)
+
     net_p <-
       ggnet2(net,
         label = TRUE, mode = "spring",
         node.size = 10, edge.size = "weight_abs", edge.color = "color"
       )
-    ## net_p
+    #' net_p
   } else {
-    ## wl-06-07-2020, Mon: 'cor_auto' is from package qgraph(lavaan)
-    ## wl-28-07-2020, Tue: cad and corr are the same
+
+    #' wl-06-07-2020, Mon: 'cor_auto' is from package qgraph(lavaan)
+    #' wl-28-07-2020, Tue: cad and corr are the same
     cad <- cor_auto(data[, -1])
     suppressWarnings(qgraph(cad,
       graph = "glasso", layout = "spring",
@@ -332,7 +347,7 @@ exploratory_analysis <- function(data = NULL) {
     graph_lasso <- recordPlot()
   }
 
-  ## -------------------> Output
+  #' -------------------> Output
   res <- list()
   res$plot_pearson_correlation <- p_corr
   res$plot_pca_individual <- pca_p
@@ -349,14 +364,14 @@ exploratory_analysis <- function(data = NULL) {
 gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
                            thres_anno = 5) {
 
-  ## -------------------> Define clusters
-  res_dist <- dist(data_symb[, -1], method = "manhattan") #' "euclidean"
+  #' -------------------> Define clusters
+  res_dist <- stats::dist(data_symb[, -1], method = "manhattan")
   res_hc <- hclust(d = res_dist, method = "single")
   clus <- cutree(res_hc, h = 0) # distance 0
 
   data_symb$cluster <- clus
 
-  ## -------------------> Subset cluster with more than 10 genes
+  #' -------------------> Subset cluster with more than 10 genes
   df <- as.data.frame(table(clus), stringsAsFactors = F)
   names(df) <- c("cluster", "nGenes")
   df_sub <- df[df$nGenes > thres_clus, ]
@@ -382,10 +397,7 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
   mat_long$cluster <- res #' update cluster with gene numbers
 
   clus_p <-
-    ggplot(
-      data = mat_long,
-      aes(x = Ion, y = log_corr_norm)
-    ) +
+    ggplot(data = mat_long, aes(x = Ion, y = log_corr_norm)) +
     facet_wrap(~cluster) +
     geom_line(aes(group = Knockout)) +
     stat_summary(fun.data = "mean_se", color = "red") +
@@ -396,7 +408,7 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
       axis.text = element_text(size = 10)
     )
 
-  ## -------------------> KEGG AND GO SLIM ANNOTATION
+  #' -------------------> KEGG AND GO SLIM ANNOTATION
   mat <- data_symb[idx, ]
   data_GOslim$Ontology <- as.character(data_GOslim$Ontology)
 
@@ -407,11 +419,7 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
 
     res <- data_GOslim %>%
       dplyr::mutate(Ontology = setNames(
-        c(
-          "Biological process",
-          "Cellular component",
-          "Molecular function"
-        ),
+        c("Biological process", "Cellular component", "Molecular function"),
         c("P", "C", "F")
       )[Ontology]) %>%
       dplyr::filter(ORFs %in% input_gene_set) %>%
@@ -431,25 +439,23 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
         dplyr::select(-KEGGID) %>%
         dplyr::mutate(Percent = Count / N * 100)) %>%
       dplyr::filter(!Term %in% c(
-        "molecular_function", "biological_process",
-        "cellular_component"
-      ))
+        "molecular_function", "biological_process", "cellular_component"))
   })
   names(kego) <- paste0("Cluster ", df_sub[[1]], " (", df_sub[[2]], " genes)")
 
   #' wl-25-07-2020, Sat: filter annotation results. Should set threshold for
   #' Percent?
   kego <- lapply(kego, function(x) {
-    ## x[(x$Percent > 5) &
-    ##   (x$Ontology %in% c("Biological process", "Cellular component",
-    ##                      "Molecular function")), ]
+    #' x[(x$Percent > 5) &
+    #'   (x$Ontology %in% c("Biological process", "Cellular component",
+    #'                      "Molecular function")), ]
     x[x$Percent > thres_anno, ]
   })
 
   #' wl-04-08-2020, Tue: bind together
   kego <- dplyr::bind_rows(kego, .id = "Cluster")
 
-  ## -------------------> GO TERMS ENRICHMENT
+  #' -------------------> GO TERMS ENRICHMENT
 
   #' wl-04-08-2020, Tue: re-write
   universe_genes <- as.character(data_symb$Knockout)
@@ -458,7 +464,7 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
   goen <- plyr::dlply(mat, "cluster", function(x) {
     #' x <- subset(mat, cluster == "10")
     input_gene_set <- as.character(x$Knockout)
-    ont <- c("BP", "MF", "CC") ## wl-04-08-2020, Tue: why three?
+    ont <- c("BP", "MF", "CC") #' wl-04-08-2020, Tue: why three? Yes, it is.
     res <- lapply(ont, function(y) {
       params <- new("GOHyperGParams",
         geneIds = input_gene_set,
@@ -493,7 +499,7 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
         )
       ),
       Ontology = y
-      ) ## %>% dplyr::filter(Pvalue <= 0.05 & Count > 1)
+      ) #' %>% dplyr::filter(Pvalue <= 0.05 & Count > 1)
     })
     do.call("rbind", res_1)
   })
@@ -505,22 +511,25 @@ gene_clustering <- function(data = NULL, data_symb = NULL, thres_clus = 10,
     dplyr::bind_rows(.id = "Cluster") %>%
     dplyr::filter(Pvalue <= 0.05 & Count > 1)
 
-  ## -------------------> Output
+  #' -------------------> Output
   res <- list()
-  res$stats_clusters <- df_sub # selected clusters
-  res$plot_profiles <- clus_p # plot cluster profiles
-  res$stats_kegg_goslim_annotation <- kego # KEGG AND GO SLIM ANNOTATION
-  res$stats_goterms_enrichment <- goen # GO TERMS ENRICHMENT
+  res$stats_clusters <- df_sub               # selected clusters
+  res$plot_profiles <- clus_p                # plot cluster profiles
+  res$stats_kegg_goslim_annotation <- kego   # KEGG AND GO SLIM ANNOTATION
+  res$stats_goterms_enrichment <- goen       # GO TERMS ENRICHMENT
   return(res)
 }
 
 #' =======================================================================
-#'
+#' wl-21-09-2020, Mon: add network extraction methods based on data similarity.
+#' wl-23-09-2020, Wed: Mahalanobis similarity takes time and are far
+#'  different from other similarity
 gene_network <- function(data = NULL, data_symb = NULL,
-                        thres_clus = 10, thres_corr = 0.6) {
+                         method_simil = "correlation",
+                         thres_clus = 10, thres_simil = 0.6) {
 
-  ## Cluster of gene with same profile
-  res_dist <- dist(data_symb[, -1], method = "manhattan")
+  #' Cluster of gene with same profile
+  res_dist <- stats::dist(data_symb[, -1], method = "manhattan")
   res_hc <- hclust(d = res_dist, method = "single")
   clus <- cutree(res_hc, h = 0) # distance 0
 
@@ -528,24 +537,20 @@ gene_network <- function(data = NULL, data_symb = NULL,
 
   df <- as.data.frame(table(clus), stringsAsFactors = F)
   names(df) <- c("cluster", "nGenes")
-  ## filter clusters with threshold
-  df_sub <- df[df$nGenes > thres_clus, ]
 
+  #' Cluster 2 (largest cluster) contains genes with no phenotype hence not
+  #' considered (input to 0) (wl: ?)
   #' wl-26-07-2020, Sun: remove the largest clusters?
-  ## Cluster 2 (largest cluster) contains genes with no phenotype hence not
-  ## considered (input to 0)
+  #' wl-09-09-2020, Wed: if true, the small data set may fail
+  df_sub <- df[df$nGenes > thres_clus, ]
   if (T) df_sub <- df_sub[-which.max(df_sub[, 2]), ]
-  #' wl-09-09-2020, Wed: if it true, the small data set may fail in network
-  #  analysis
-
   rownames(df_sub) <- c()
 
   #' wl-24-07-2020, Fri: cluster index satisfing threshold of cluster number
   index <- clus %in% df_sub$cluster
 
-  ## cluster labels with info of accumulation/decumulation of Ions
-  ## (high/lower abundance)
-  ## Assign label
+  #' cluster labels with info of accumulation/decumulation of Ions
+  #' (high/lower abundance)
   df_symb <- data_symb[index, ]
   lab <- plyr::ddply(df_symb, "cluster", function(x) {
     mat <- x[, !names(df_symb) %in% c("Knockout", "cluster")]
@@ -571,24 +576,24 @@ gene_network <- function(data = NULL, data_symb = NULL,
   })
   df_symb$Label <- label
 
-  ## Compute empirical correlation matrix
-  corr_genes <- cor(t(as.matrix(data[, -1])),
-    method = "pearson",
-    use = "pairwise.complete.obs"
-  )
+  #' get similarity of data set
+  sim <- df_simil(data[, -1], method = method_simil)
+  #' sim <- cor(t(as.matrix(data[, -1])), method = "pearson",
+  #'            use = "pairwise.complete.obs")
 
-  ## Subset correlation matrix based on the cluster filtering
-  corr_genes <- corr_genes[index, index]
-  ## Diagonal value (1's) put to 0 to avoid showing edges from/to the same gene
-  diag(corr_genes) <- 0
+  #' Subset matrix based on the cluster filtering
+  sim <- sim[index, index]
+  #' Diagonal value (1's) put to 0 to avoid showing edges from/to the same
+  #' gene
+  diag(sim) <- 0
 
-  ## Subset correlation matrix based on threshold=0.6
-  ## wl-27-07-2020, Mon: need another threshold?
-  corr_genes <- (corr_genes > thres_corr)
-  corr_genes <- ifelse(corr_genes == TRUE, 1, 0)
+  #' Subset correlation matrix based on threshold=0.6
+  #' wl-27-07-2020, Mon: need another threshold?
+  sim <- (sim > thres_simil)
+  sim <- ifelse(sim == TRUE, 1, 0)
 
-  ## Generate network
-  net <- network::network(corr_genes, directed = FALSE)
+  #' Generate network
+  net <- network::network(sim, directed = FALSE)
 
   #' wl-28-07-2020, Tue: add an vertex attribute and use 'Set2' in
   #'  RColorBrewer but the max. number of colors is 8 in 'Set2'
@@ -596,7 +601,7 @@ gene_network <- function(data = NULL, data_symb = NULL,
   #'  kamadakawai, spring
   net %v% "Label" <- df_symb$Label
   tmp <- unique(df_symb$Label)
-  ## fix a bug (may from ggnet2)
+  #' fix a bug (may from ggnet2)
   if (length(tmp) != 1) {
     cpy <- rainbow(length(tmp))
     names(cpy) <- tmp
@@ -612,8 +617,8 @@ gene_network <- function(data = NULL, data_symb = NULL,
   )
   #' net_p
 
-  ## Impact and betweenness
-  btw <- sna::betweenness(corr_genes)
+  #' Impact and betweenness
+  btw <- sna::betweenness(sim)
   impact <- apply(data[index, -1], 1, norm, type = "2") # L2 norm
 
   df_res <- data.frame(
@@ -671,9 +676,7 @@ gene_network <- function(data = NULL, data_symb = NULL,
     ggplot(data = df_res, aes(x = impact, y = log.betweenness)) +
     geom_point(aes(col = pos.label), alpha = .3, size = 3) +
     scale_color_manual(values = c(
-      "plum4", "palegreen4", "indianred",
-      "cornflowerblue"
-    )) +
+      "plum4", "palegreen4", "indianred", "cornflowerblue")) +
     theme_linedraw() +
     theme_light() +
     theme(legend.position = "bottom") +
@@ -689,28 +692,152 @@ gene_network <- function(data = NULL, data_symb = NULL,
     ylab("Log(betweenness+1)")
 
   rownames(df_res) <- c()
-  df_res2 <- df_res[, -c(4, 5)]
-  names(df_res2) <- c("Knockout", "Impact", "Betweenness", "Position")
+  df_res <- df_res[, -c(4, 5)]
+  names(df_res) <- c("Knockout", "Impact", "Betweenness", "Position")
 
   gene_cluster <- df_symb[, c("Knockout", "Label")]
   names(gene_cluster) <- c("Knockout", "Cluster")
-  df_res3 <- merge(df_res2, gene_cluster, by = "Knockout", all.x = TRUE)
+  df_res <- merge(df_res, gene_cluster, by = "Knockout", all.x = TRUE)
 
-  #' wl-28-07-2020, Tue: better to return df_tab instead of df_tab2
-  df_tab <- data.frame(table(df_res3$Cluster, df_res3$Position))
+  #' wl-28-07-2020, Tue: better to return df_tab instead of df_tab1
+  df_tab <- data.frame(table(df_res$Cluster, df_res$Position))
   names(df_tab) <- c("Cluster", "Position", "nGenes")
   df_tab <- dplyr::arrange(df_tab, desc(nGenes))
-  df_tab2 <- df_tab %>%
-    dplyr::group_by(Cluster) %>%
-    top_n(1, nGenes)
+  df_tab1 <- df_tab %>% dplyr::group_by(Cluster) %>% top_n(1, nGenes)
 
-  ## -------------------> Output
+  #' -------------------> Output
   res <- list()
-  res$plot_pnet <- net_p # plot gene network
-  res$plot_impact_betweenness <- im_be_p # plot impact betweenees
-  res$stats_impact_betweenness <- df_res3 # impact betweenees data
-  res$stats_impact_betweenness_clus <- df_tab2 # plot position by cluster
-  ## wl-28-07-2020, Tue: return this one as well
-  res$stats_impact_betweenness_tab <- df_tab # contingency table
+  res$plot_pnet <- net_p                         # plot gene network
+  res$plot_impact_betweenness <- im_be_p         # plot impact betweenees
+  res$stats_impact_betweenness <- df_res         # impact betweenees data
+  res$stats_impact_betweenness_clus <- df_tab1   # plot position by cluster
+  res$stats_impact_betweenness_tab <- df_tab     # contingency table
+  res$stats_clus_tab <- df                       # cluster table
   return(res)
+}
+
+#' =======================================================================
+#' wl-18-09-2020, Fri: row-wise similarity of data matrix.
+#'  - Use R package 'proxy' two functions: simil and dist. Use 'summary(pr_DB)'
+#'    to check.
+#'  - There are four similarity metrics in range (0 ~ 1): correlation,
+#'    cosine, eJaccard and eDice.
+#'  - 'correlation' is the same as:
+#'    cor(t(data), method = "pearson", use = "pairwise.complete.obs")
+#' wl-20-09-2020, Sun: convert distance to similarity score
+#'    (https://bit.ly/3kwcPzM)
+#'  - If you are using a distance metric that is naturally between 0 and 1,
+#'    like Hellinger distance. Then you can use 1 - distance to obtain
+#'    similarity.
+#'  - If dis(p1,p2) represents the distance from point p1 to point p2, the
+#'    similarity sim(p1,p2) = 1/(1+dis(p1,p2)) is commonly used.
+#' wl-21-09-2020, Mon:
+#'  - Normalise distance into (0 - 1) and get similarity by 1 - distance
+#'  - Normalisation transformation (0 - 1): substracting the minimum and
+#'    dividing by the maximum of all observations.
+#'  - https://bit.ly/3hMAvhv
+#'  - https://bit.ly/3iSTJTW
+#' wl-22-09-2020, Tue: Mahalanobis distance
+#'  - The computation of Mahalanobis takes time, especially large data set
+#'  - The similarity from Mahalanlobis distance is far different from
+#'    similarity of correlation, cosine, eJaccard and eDice. Remove it?
+#' @examples:
+#' library(proxy)
+#' x <- matrix(rnorm(20*3), ncol = 3)
+#' df_simil(x, "cosine")
+#' df_simil(x, "Mahalanobis") #' takes time
+#'
+df_simil <- function(x, method = c("correlation", "cosine",
+                                   "eJaccard", "Mahalanobis")) {
+  method <- match.arg(method)
+  #' x <- as.matrix(x)
+
+  if (method == "Mahalanobis") {
+    res <- proxy::dist(x, x, method = "Mahalanobis")
+
+    #' wl-20-09-2020, Sun: Problem: cannot coerce class ‘"crossdist"’
+    #'   to a data.frame. re-assign attribute
+    #' res <- as.data.frame(res)       #' does not work
+    #' res <- as.matrix(res)           #' does not work
+    #' attributes(res)
+    #' attributes(res)$class <- "matrix"
+    #' res <- as.data.frame(res)
+    res <- as.data.frame.matrix(res)
+
+    #' Convert distance to similarity
+    if (F) {
+      res <- 1/(1 + res)
+    } else {
+      max_all <- max(res, na.rm = T)
+      min_all <- min(res, na.rm = T)
+      #' set the MARGIN to 1:2 to operate on each cell
+      res <- apply(res, 1:2, function(x) (x - min_all)/(max_all - min_all))
+      res <- 1 - res
+    }
+  } else {
+    res <- proxy::simil(x, x, method = method)
+    res <- as.data.frame.matrix(res)
+  }
+  return(res)
+}
+
+#' =======================================================================
+#' wl-19-09-2020, Sat: Univariate outlier detection.
+#'   Modified from R package GmAMisc.
+#'
+#' Three methods, "mean", "median" and "boxplot", are implemented. "mean" is
+#' less robust. These methods are those described in: Wilcox R R,
+#' "Fundamentals of Modern Statistical Methods: Substantially Improving Power
+#' and Accuracy", Springer 2010 (2nd edition), pages 31-35.
+#'
+#' (1) With the mean-based method, an observation is considered outlier if the
+#' absolute difference between that observation and the sample mean is more than
+#' 2 Standard Deviations away (in either direction) from the mean.
+#'
+#' (2) The median-based method considers an observation as being outlier if the
+#' absolute difference between the observation and the sample median is larger
+#' than the Median Absolute Deviation divided by 0.6745.
+#'
+#' (3) The boxplot-based method considers an observation as being an outlier if
+#' it is either smaller than the 1st quartile minus 1.5 times the interQuartile
+#' Range, or larger than the 3rd quartile minus 1.5 times the interquartile
+#' Range.
+#' x - an numeric vector
+#' @example
+#' x <- c(2, 3, 4, 5, 6, 7, 8, 9, 50, 50)
+#' univa_outl(x, "boxplot")
+#'
+univa_outl <- function(x, method = c("boxplot", "median", "mean")){
+  method <- match.arg(method)
+  if (method == "mean"){
+    outlier  <- abs(x - mean(x)) > 2 * sd(x)
+  }
+  if (method == "median"){
+    med <- median(x)
+    mad <- median(abs(med - x))
+    outlier  <- abs(x - med) > 2 * (mad / 0.6745)
+  }
+  if (method == "boxplot") {
+    q1 <- quantile(x, 0.25)
+    q3 <- quantile(x, 0.75)
+    iqr <- q3 - q1
+    outlier  <- x < q1 - 1.5 * iqr | x > q3 + 1.5 * iqr
+  }
+  return(as.numeric(outlier))
+}
+
+#' =======================================================================
+#' wl-22-09-2020, Tue: vector normalisation
+#' @example
+#' x <- c(2, 3, 4, 5, 6, 7, 8, 9, 50, 50)
+#' vec_norm(x, method = "median", scale = T)
+vec_norm <- function(x, method = "median", scale = TRUE) {
+  method <- match.arg(method, c("median", "mean"))
+  method <- get(method)
+  center <- method(x, na.rm = T)
+  x <- x - center
+  if (scale) {
+    x <- x/sd(x, na.rm = T)
+  }
+  return(x)
 }
